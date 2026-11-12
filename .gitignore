@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 用户自己的分组配置（由 groups.example.yaml 生成）
+groups.yaml
+
+# 运行产物
+整理结果/
+.phonesort/
+测试素材*/
+测试输出*/
+
+# 本地截图（仓库里使用 docs/preview.png）
+界面预览.png
+
+# 测试/调试临时文件
+tests/_*
+
+# 发布时临时使用的凭据文件
+.git-credentials*

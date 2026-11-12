@@ -1,0 +1,170 @@
+# =====================================================================
+# 手机相册分组整理 · 分组规则
+#
+# 改完保存，回到程序点“重新加载分组”即可生效。
+#
+# 匹配字段（一条规则里写多个字段 = 必须同时满足）：
+#   path            手机里的相对路径，* 匹配任意字符（可跨目录）
+#                   例：'*/WeiXin/*'、'*/DCIM/Camera/*'
+#   name            文件名正则（不区分大小写）
+#   ext             扩展名列表，例：[.jpg, .png]
+#   media           image 或 video
+#   exif_make       EXIF 厂商正则，例：'HUAWEI|Xiaomi'
+#   exif_model      EXIF 机型正则
+#   exif_software   EXIF 软件正则，例：'美图|Snapseed'
+#   min_size_kb / max_size_kb        文件大小范围
+#   min_width / max_width / min_height / max_height   像素范围
+#   ratio_min / ratio_max            宽高比范围
+#   date_after / date_before         日期范围，例：'2024-01-01'
+#
+# 分组按从上到下的顺序匹配，第一个命中的生效。
+# 带 default: true 的分组是兜底，必须放在最后。
+# 把某个分组的 enabled 改成 false 可停用（界面上点 ☑ 也一样）。
+# =====================================================================
+
+version: 1
+
+device:
+  # 有多台设备时，用名称关键字指定；留空 = 第一台
+  name_contains: ""
+
+scan:
+  # 只扫描这些目录（手机存储根目录下的相对路径）；留空 [] = 扫描全部
+  roots:
+    - "DCIM"
+    - "Pictures"
+    - "Download"
+    - "Downloads"
+    - "Movies"
+    - "Tencent"
+    - "图库"
+    - "Documents"
+    - "Android/media"
+    - "WeiXin"
+    - "WeChat"
+    - "QQ"
+    - "Huawei"
+  # 这些目录不扫描
+  skip_dirs:
+    - "Android/data"
+    - "Android/obb"
+    - ".thumbnails"
+    - ".trash"
+    - "LOST.DIR"
+    - "$RECYCLE.BIN"
+    - "System Volume Information"
+  extensions:
+    image: [".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".bmp", ".dng", ".tif", ".tiff", ".avif"]
+    video: [".mp4", ".mov", ".m4v", ".mkv", ".avi", ".3gp", ".webm", ".wmv", ".flv", ".ts", ".mpg", ".mpeg"]
+  min_size_kb: 0      # 小于这个大小的文件跳过（0 = 不限制）
+  max_size_mb: 0      # 大于这个大小的文件跳过（0 = 不限制）
+  max_depth: 15       # 最大目录层级
+
+camera:
+  # true = 排除相机拍摄的照片/视频（你要的效果）
+  exclude: true
+  # 打开“包含相机拍摄”时，它们归到这个分组
+  group: "相机"
+  # 相机照片常见的目录
+  paths:
+    - "*/DCIM/Camera/*"
+    - "*/DCIM/100ANDRO/*"
+    - "*/DCIM/Video/*"
+    - "*/图库/相机/*"
+    - "*/相机/*"
+    - "*/Camera/*"
+  # 相机照片常见的文件名
+  name_patterns:
+    - '^IMG_\d{8}_\d{6}'
+    - '^VID_\d{8}_\d{6}'
+    - '^MVIMG_'
+    - '^PXL_\d{8}_'
+    - '^DSC_?\d{4}'
+    - '^PANO_'
+    - '^GOPR\d{4}'
+    - '^DJI_\d{4}'
+  # 带这些 EXIF 厂商信息的，视为相机拍摄（放在“其他”里的会被排除）
+  exif_make_patterns: ["HUAWEI", "HONOR", "Xiaomi", "Redmi", "samsung", "OPPO", "vivo", "OnePlus", "realme", "Google", "Apple", "Meizu", "nubia", "motorola", "SONY", "Nokia", "Nothing", "ASUS", "Lenovo"]
+
+groups:
+  - name: "截图"
+    enabled: true
+    rules:
+      - path: "*/Screenshots/*"
+      - path: "*/DCIM/Screenshots/*"
+      - path: "*/图库/截图/*"
+      - name: '^(Screenshot|ScreenShot|screenshot|截屏|屏幕截图)'
+      - name: '^\d{8}_\d{6}_screenshot'
+
+  - name: "微信"
+    enabled: true
+    rules:
+      - path: "*/WeiXin/*"
+      - path: "*/MicroMsg/*"
+      - path: "*/WeChat/*"
+      - name: '^(mmexport|wx_camera_)'
+      - name: '^microMsg\.'
+
+  - name: "QQ"
+    enabled: true
+    rules:
+      - path: "*/QQ_Images/*"
+      - path: "*/Tencent/QQ*"
+      - path: "*/QQ/*"
+      - name: '^(qq_|QQ图片)'
+
+  - name: "录屏"
+    enabled: true
+    rules:
+      - path: "*/ScreenRecorder*/*"
+      - path: "*/Screen Recordings/*"
+      - path: "*/录屏/*"
+      - name: '^(Screenrecorder|ScreenRecording|screen-recorder)'
+
+  - name: "下载"
+    enabled: true
+    rules:
+      - path: "*/Download/*"
+      - path: "*/Downloads/*"
+      - path: "*/Browser/*"
+      - path: "*/browser/*"
+      - path: "*/UC Downloads/*"
+
+  - name: "修图"
+    enabled: true
+    rules:
+      - exif_software: "美图|Meitu|Snapseed|Lightroom|PicsArt|醒图|VSCO|黄油相机|InShot|CapCut|剪映|Wink|Faceu|B612"
+      - path: "*/Meitu/*"
+      - path: "*/美图秀秀/*"
+      - path: "*/Snapseed/*"
+      - path: "*/Lightroom/*"
+
+  - name: "文档扫描"
+    enabled: true
+    rules:
+      - path: "*/CamScanner/*"
+      - path: "*/扫描全能王/*"
+      - path: "*/scans/*"
+      - path: "*/Scan/*"
+
+  - name: "视频"
+    enabled: true
+    rules:
+      - media: "video"
+
+  - name: "其他"
+    enabled: true
+    default: true
+    rules: []
+
+options:
+  # 分组内的二级目录，留空 = 直接放在分组目录里
+  # 例："{year}/{month}" 或 "{year}-{month}"
+  subfolder: ""
+  # 重命名模板：{orig} 原名，{date} 20240101，{time} 101010
+  # 例："{date}_{time}_{orig}"
+  filename: "{orig}"
+  # 内容完全相同的文件只保留一份
+  dedupe: true
+  unknown_date_folder: "未知日期"
+  overwrite: false
