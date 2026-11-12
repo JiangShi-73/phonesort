@@ -43,7 +43,10 @@ def _add_common(parser):
     parser.add_argument("--device", default="", help="手机名称包含的关键字，默认第一台")
     parser.add_argument("--storage", action="append", default=[], help="只扫描指定存储（可重复）")
     parser.add_argument("--include-camera", action="store_true", help="连相机拍摄的照片也一起整理")
+    parser.add_argument("--ai", dest="ai", action="store_true", help="启用内容识别（二次元/梗图）")
+    parser.add_argument("--no-ai", dest="ai", action="store_false", help="关闭内容识别")
     parser.add_argument("--limit", type=int, default=0, help="最多处理多少个文件（调试用）")
+    parser.set_defaults(ai=None)
 
 
 def cmd_devices(args):
@@ -80,6 +83,8 @@ def cmd_init(args):
 def cmd_scan(args):
     ensure_config()
     cfg = load_config(args.config)
+    if args.ai is not None:
+        cfg.setdefault("ai", {})["enabled"] = bool(args.ai)
     try:
         source = _build_source(args, cfg)
     except Exception as exc:
@@ -106,6 +111,8 @@ def cmd_scan(args):
         for example in result["examples"].get(group, [])[:2]:
             print(f"       · {example}")
     print("-" * 48)
+    if result.get("ai_skipped"):
+        print("提示：手机预览不读取图片内容，二次元/梗图会在正式整理时识别。")
     print("这是预览，不会复制任何文件。")
     return 0
 
@@ -113,6 +120,8 @@ def cmd_scan(args):
 def cmd_run(args):
     ensure_config()
     cfg = load_config(args.config)
+    if args.ai is not None:
+        cfg.setdefault("ai", {})["enabled"] = bool(args.ai)
     try:
         source = _build_source(args, cfg)
     except Exception as exc:
@@ -147,6 +156,16 @@ def cmd_run(args):
     return 0
 
 
+def cmd_setup_ai(args):
+    from .model_download import download_model
+
+    target = Path(args.dir) if args.dir else APP_DIR / "models" / "clip-vit-base-patch32"
+    print(f"下载到：{target}")
+    download_model(target)
+    print("模型已就绪。")
+    return 0
+
+
 def cmd_gui(args):
     from .gui import main as gui_main
     return gui_main()
@@ -177,6 +196,10 @@ def build_parser():
     _add_common(p_run)
     p_run.add_argument("--dry-run", action="store_true", help="只走流程不实际复制")
     p_run.set_defaults(func=cmd_run)
+
+    p_ai = sub.add_parser("setup-ai", help="下载内容识别模型（约 580MB）")
+    p_ai.add_argument("--dir", default="", help="模型保存目录")
+    p_ai.set_defaults(func=cmd_setup_ai)
 
     p_gui = sub.add_parser("gui", help="打开图形界面")
     p_gui.set_defaults(func=cmd_gui)

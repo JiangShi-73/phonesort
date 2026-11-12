@@ -8,6 +8,9 @@ venv/
 # 用户自己的分组配置（由 groups.example.yaml 生成）
 groups.yaml
 
+# 本地模型（约 580MB，用 python -m phonesort setup-ai 下载）
+models/
+
 # 运行产物
 整理结果/
 .phonesort/

@@ -34,6 +34,8 @@ def check(cond, message):
 
 
 def run(args):
+    # 测试固定关闭内容识别，保证结果可复现
+    args = list(args) + ["--no-ai"]
     # 沙箱环境可能禁止管道，用文件重定向收集输出
     log_path = PROJ / "tests" / "_last_output.txt"
     with open(log_path, "w", encoding="utf-8") as handle:

@@ -157,6 +157,67 @@ groups:
     default: true
     rules: []
 
+ai:
+  # 用本地 CLIP 模型识别图片内容，分出“二次元”和“梗图”。
+  # 模型下载见 README 的“内容识别”一节；没有模型时这里保持 false 即可。
+  enabled: false
+  model_dir: "models/clip-vit-base-patch32"
+  # 分数达到 threshold 且领先第二名 margin，才采用 AI 结果
+  threshold: 0.30
+  margin: 0.05
+  # 每个分组可以单独设阈值（没写的用上面的 threshold）
+  thresholds:
+    二次元: 0.35
+    梗图: 0.20
+  # true = 连相机拍的照片也拿来做内容识别（挑中的进二次元/梗图）
+  include_camera: false
+  # true = AI 结果优先于路径规则
+  override_rules: true
+  labels:
+    二次元:
+      - "an anime illustration"
+      - "a cartoon drawing"
+      - "a manga page"
+      - "an anime character portrait"
+      - "a digital illustration of an anime girl"
+      - "a cosplay photo of a person in costume"
+      - "a cosplayer wearing a wig and costume"
+      - "a photo of someone dressed as an anime character"
+    梗图:
+      - "an internet meme"
+      - "a reaction image with a caption"
+      - "a funny meme picture"
+      - "a sticker with text"
+      - "a screenshot of a funny chat"
+      - "a meme with impact font text"
+      - "an image macro with white caption text"
+      - "a picture with a funny caption"
+      - "a meme template"
+      - "a cartoon reaction face"
+      - "a Chinese internet meme"
+      - "a Chinese sticker with text"
+      - "a biaoqingbao sticker"
+      - "a reaction image with Chinese characters"
+      - "a meme of an animal with a caption"
+    其他:
+      - "a normal photograph"
+      - "a photo of a person"
+      - "a portrait photo of a person"
+      - "a selfie"
+      - "a group photo"
+      - "a screenshot of an app"
+      - "a screenshot of a website"
+      - "a document scan"
+      - "a landscape photo"
+      - "a street photo"
+      - "a building"
+      - "a food photo"
+      - "a product photo"
+      - "a photo of a cat"
+      - "a photo of a dog"
+      - "a photo of an animal"
+      - "a wildlife photo"
+
 options:
   # 分组内的二级目录，留空 = 直接放在分组目录里
   # 例："{year}/{month}" 或 "{year}-{month}"

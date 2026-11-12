@@ -15,6 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 from .config import APP_DIR, ensure_config, load_config
 from .pipeline import Organizer, format_summary
 from .source import FolderSource, MtpSource, list_devices
+from .vision import model_ready
 
 FONT = "Microsoft YaHei UI"
 BG = "#f4f5f7"
@@ -31,6 +32,10 @@ class App(tk.Tk):
 
         self.cfg_path = ensure_config()
         self.cfg = load_config(self.cfg_path)
+        model_dir = Path(self.cfg.get("ai", {}).get("model_dir", "models/clip-vit-base-patch32"))
+        if not model_dir.is_absolute():
+            model_dir = APP_DIR / model_dir
+        self.ai_available = model_ready(model_dir)
         self.devices = []
         self.groups_state: dict[str, bool] = {}
         self.queue: queue.Queue = queue.Queue()
@@ -152,6 +157,12 @@ class App(tk.Tk):
         ttk.Checkbutton(options, text="仅预览，不实际复制", variable=self.dry_run_var).pack(
             side="left", padx=(20, 0)
         )
+        self.ai_var = tk.BooleanVar(value=bool(self.cfg.get("ai", {}).get("enabled")))
+        self.ai_check = ttk.Checkbutton(options, text="内容识别（二次元/梗图）", variable=self.ai_var)
+        self.ai_check.pack(side="left", padx=(20, 0))
+        if not self.ai_available:
+            self.ai_check.configure(state="disabled")
+            ttk.Label(options, text="模型未下载", style="Hint.TLabel").pack(side="left", padx=(6, 0))
 
         # --- 操作
         actions = ttk.Frame(body)
@@ -224,6 +235,12 @@ class App(tk.Tk):
             self.tree.insert("", "end", iid=name, values=(
                 "☑" if enabled else "☐", name, len(group.get("rules") or []), "-", note,
             ))
+        for ai_name in (self.cfg.get("ai", {}).get("labels") or {}):
+            if ai_name == "其他" or self.tree.exists(ai_name):
+                continue
+            self.tree.insert("", "end", iid=ai_name, values=(
+                "AI", ai_name, "-", "-", "内容识别（AI）",
+            ))
 
     def _toggle_group(self, event):
         if self.busy:
@@ -231,7 +248,7 @@ class App(tk.Tk):
         if self.tree.identify_column(event.x) != "#1":
             return
         row = self.tree.identify_row(event.y)
-        if not row:
+        if not row or row not in self.groups_state:
             return
         self.groups_state[row] = not self.groups_state.get(row, True)
         self.tree.set(row, "on", "☑" if self.groups_state[row] else "☐")
@@ -241,6 +258,7 @@ class App(tk.Tk):
             name = group.get("name", "")
             if name in self.groups_state:
                 group["enabled"] = self.groups_state[name]
+        self.cfg.setdefault("ai", {})["enabled"] = bool(self.ai_var.get())
 
     def _refresh_devices(self):
         if self.busy:
@@ -294,6 +312,9 @@ class App(tk.Tk):
     def _start_scan(self):
         if self.busy:
             return
+        if self.ai_var.get() and not self.ai_available:
+            messagebox.showwarning("提示", "内容识别模型还没下载。请运行：python -m phonesort setup-ai")
+            return
         self.cfg = load_config(self.cfg_path)
         self._apply_group_states()
         out_dir = self.out_var.get().strip()
@@ -322,6 +343,9 @@ class App(tk.Tk):
 
     def _start_run(self):
         if self.busy:
+            return
+        if self.ai_var.get() and not self.ai_available:
+            messagebox.showwarning("提示", "内容识别模型还没下载。请运行：python -m phonesort setup-ai")
             return
         self.cfg = load_config(self.cfg_path)
         self._apply_group_states()
@@ -428,6 +452,8 @@ class App(tk.Tk):
                 self.tree.set(group, "count", str(count))
         total = result.get("total", 0)
         lines = [f"预览：共 {total} 个，相机排除 {result.get('camera', 0)} 个"]
+        if result.get("ai_skipped"):
+            lines.append("（手机预览不含内容识别，二次元/梗图会在正式整理时出现）")
         for group, count in sorted(result.get("by_group", {}).items(), key=lambda kv: -kv[1]):
             lines.append(f"  {group}：{count} 个（{result.get('by_group_bytes', {}).get(group, '')}）")
         self._log("\n".join(lines))

@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
-from .config import enabled_groups
+from .config import APP_DIR, enabled_groups
 from .metadata import (
     guess_taken_at,
     human_size,
@@ -165,6 +165,10 @@ class Organizer:
         self.state_dir = self.out_dir / ".phonesort"
         self.staging_root = self.state_dir / "staging"
         self.manifest = Manifest(self.state_dir / "state.json")
+        self.ai_cfg = cfg.get("ai", {}) or {}
+        self.ai_enabled = bool(self.ai_cfg.get("enabled"))
+        self.classifier = None
+        self.ai_failed = False
         self._csv = None
         self._csv_file = None
 
@@ -277,6 +281,65 @@ class Organizer:
                     return candidate
         return target
 
+    def _model_dir(self) -> Path:
+        raw = self.ai_cfg.get("model_dir", "models/clip-vit-base-patch32")
+        path = Path(raw).expanduser()
+        if not path.is_absolute():
+            path = APP_DIR / path
+        return path
+
+    def _ensure_classifier(self):
+        if self.classifier is not None:
+            return self.classifier
+        from .vision import ClipClassifier, model_ready
+
+        model_dir = self._model_dir()
+        if not model_ready(model_dir):
+            raise RuntimeError(f"找不到 CLIP 模型：{model_dir}")
+        labels = self.ai_cfg.get("labels") or {}
+        self.classifier = ClipClassifier(model_dir, labels)
+        return self.classifier
+
+    def _ai_decision(self, path):
+        if not self.ai_enabled or self.ai_failed:
+            return None
+        try:
+            classifier = self._ensure_classifier()
+            return classifier.decide(
+                path,
+                float(self.ai_cfg.get("threshold", 0.32)),
+                float(self.ai_cfg.get("margin", 0.08)),
+                self.ai_cfg.get("thresholds") or {},
+            )
+        except Exception as exc:
+            self.ai_failed = True
+            self._emit(type="warning", message=f"内容识别不可用：{exc}")
+            return None
+
+    def _decide_group(self, info: MediaInfo, ai_hit, cfg: dict):
+        """返回 (分组, 说明, 是否按相机排除)。"""
+        camera_group = cfg.get("camera", {}).get("group", "相机")
+        cam = camera_reason(info, cfg)
+        allow_camera_probe = self.ai_enabled and bool(self.ai_cfg.get("include_camera"))
+        if cam and not self.include_camera and not allow_camera_probe:
+            return None, cam, True
+
+        group, why, explicit = classify(info, cfg)
+        ai_group = ai_hit[0] if ai_hit else None
+        if ai_group and (self.ai_cfg.get("override_rules", True) or not explicit):
+            return ai_group, f"AI {ai_group} {ai_hit[1]:.2f}", False
+
+        exif_cam = exif_camera_reason(info, cfg)
+        if cam:
+            if self.include_camera:
+                return camera_group, cam, False
+            return None, cam, True
+        if exif_cam and not explicit:
+            if self.include_camera:
+                return camera_group, exif_cam, False
+            return None, exif_cam, True
+        return group, why, False
+
     # ------------------------------------------------------------- preview
     def preview(self) -> dict:
         files = self._collect()
@@ -289,21 +352,13 @@ class Organizer:
             if self._cancelled():
                 break
             info = self._info_from_remote(remote, deep=deep)
-            reason = camera_reason(info, self.cfg)
-            if reason:
-                if not self.include_camera:
-                    camera += 1
-                    continue
-                group = self.cfg.get("camera", {}).get("group", "相机")
-                why = reason
-            else:
-                group, why, explicit = classify(info, self.cfg)
-                if exif_camera_reason(info, self.cfg) and not explicit:
-                    if not self.include_camera:
-                        camera += 1
-                        continue
-                    group = self.cfg.get("camera", {}).get("group", "相机")
-                    why = "EXIF 相机"
+            ai_hit = None
+            if self.ai_enabled and deep and info.media == "image" and isinstance(remote.handle, str):
+                ai_hit = self._ai_decision(remote.handle)
+            group, why, excluded = self._decide_group(info, ai_hit, self.cfg)
+            if excluded:
+                camera += 1
+                continue
             by_group[group] += 1
             sizes[group] += info.size
             examples.setdefault(group, [])
@@ -315,6 +370,7 @@ class Organizer:
             "by_group": dict(by_group),
             "by_group_bytes": {k: human_size(v) for k, v in sizes.items()},
             "examples": examples,
+            "ai_skipped": bool(self.ai_enabled and self.source.kind != "folder"),
         }
 
     # ------------------------------------------------------------- run
@@ -390,7 +446,8 @@ class Organizer:
             return
 
         cam = camera_reason(info, cfg)
-        if cam and not self.include_camera:
+        allow_camera_probe = self.ai_enabled and bool(self.ai_cfg.get("include_camera"))
+        if cam and not self.include_camera and not allow_camera_probe:
             summary.camera_skipped += 1
             self._write_row(STATUS_CAMERA, "", info, "", cam)
             self._emit(type="file_done", index=index, total=summary.total, status="camera",
@@ -398,10 +455,10 @@ class Organizer:
             return
 
         if self.dry_run:
-            group = cfg.get("camera", {}).get("group", "相机") if cam else classify(info, cfg)[0]
-            if group in ("其他", "未命名") and exif_camera_reason(info, cfg) and not self.include_camera:
+            group, why, excluded = self._decide_group(info, None, cfg)
+            if excluded or group is None:
                 summary.camera_skipped += 1
-                self._write_row(STATUS_CAMERA, "", info, "", "EXIF 相机")
+                self._write_row(STATUS_CAMERA, "", info, "", why or "相机")
                 self._emit(type="file_done", index=index, total=summary.total, status="camera",
                            group="", name=remote.name)
                 return
@@ -424,23 +481,20 @@ class Organizer:
         info.size = local.stat().st_size or info.size
         self._fill_from_file(info, local)
 
-        # 2) 相机 EXIF 排除（路径已排除的上面已处理；这里只处理“其他”里的相机照片）
-        group, why, explicit = classify(info, cfg)
-        exif_cam = exif_camera_reason(info, cfg)
-        if exif_cam and not explicit:
-            if not self.include_camera:
-                summary.camera_skipped += 1
-                self._write_row(STATUS_CAMERA, "", info, "", exif_cam)
-                self._emit(type="file_done", index=index, total=summary.total, status="camera",
-                           group="", name=remote.name)
-                shutil.rmtree(item_dir, ignore_errors=True)
-                return
-            group = cfg.get("camera", {}).get("group", "相机")
-            why = exif_cam
+        # 2) 内容识别（可选）
+        ai_hit = None
+        if self.ai_enabled and info.media == "image":
+            ai_hit = self._ai_decision(local)
 
-        if cam:
-            group = cfg.get("camera", {}).get("group", "相机")
-            why = cam
+        # 3) 规则 + 相机 + AI 综合判定
+        group, why, excluded = self._decide_group(info, ai_hit, cfg)
+        if excluded or group is None:
+            summary.camera_skipped += 1
+            self._write_row(STATUS_CAMERA, "", info, "", why or "相机")
+            self._emit(type="file_done", index=index, total=summary.total, status="camera",
+                       group="", name=remote.name)
+            shutil.rmtree(item_dir, ignore_errors=True)
+            return
 
         # 3) 去重
         digest = sha256_file(local)
