@@ -25,3 +25,9 @@ tests/_*
 
 # 发布时临时使用的凭据文件
 .git-credentials*
+
+# 手机内移动临时文件 / 日志 / ADB 工具
+.phone_move_tmp/
+手机整理日志-*.csv
+tools/
+_ps_*
