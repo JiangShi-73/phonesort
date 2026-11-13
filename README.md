@@ -102,6 +102,48 @@ python -m phonesort setup-ai
 - 界面上勾选 **“内容识别（二次元/梗图）”**
 - 或命令行加 `--ai`
 
+### 方式二：走 DSH 接入的 opencode-go（推荐，不耗 DeepSeek 官方余额）
+
+DSH 当前用的是 opencode-go 通道，模型 `deepseek-v4.1-flash` 本身支持图片：
+
+- 地址：`https://opencode.ai/zen/go/v1`
+- 模型：`deepseek-v4.1-flash`
+- 认证：DSH 保存的 `OPENCODE_API_KEY`（代码会自动从 `~/.dsh/.credentials.yaml` 读取）
+- 计费：走 Go 套餐额度
+
+`groups.yaml` 已经配好：
+
+```yaml
+ai:
+  enabled: true
+  backend: "api"
+  api:
+    base_url: "https://opencode.ai/zen/go/v1"
+    model: "deepseek-v4.1-flash"
+    api_key_env: "OPENCODE_API_KEY"
+    session_header: true
+    max_tokens: 2000
+    reasoning_effort: "low"
+    threshold: 0.55
+```
+
+**最快用法**：双击 `一键整理-DSH.bat`，它会先复制（跳过相机和已分类相册），再用 32 路并发调用 DSH 视觉接口做最终分类。
+
+也可以分两步手动跑：
+
+```bat
+python -m phonesort run --no-ai --out 整理结果
+python dsh_reclassify.py --workers 32
+```
+
+- `dsh_reclassify.py` 会重新判断每一张图，把二次元/梗图移进对应文件夹，判成“其他”的移回 `其他/`
+- 默认 24 并发；一键脚本用 32，额度多可以加到 `--workers 48`
+- 支持续跑：中断后重跑会跳过已处理的图片（`整理结果/.phonesort/reclassify_state.json`）
+- 想换模型：`--model qwen3.8-flash` 或 `--model claude-haiku-5-5`（都是 opencode-go 上的视觉模型，速度可能更快）
+
+> 如果要用 DeepSeek 官方 API：把 `base_url` 改回 `https://api.deepseek.com`、`model` 改 `deepseek-flash`、
+> `api_key_env` 改 `DEEPSEEK_API_KEY`，并保证账户有余额。
+
 ### 怎么判定
 
 每张图会和一组英文提示词算相似度（CLIP zero-shot），分数达标才采用：
