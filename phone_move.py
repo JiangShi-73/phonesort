@@ -194,8 +194,8 @@ def main() -> int:
         return 0
 
     classifier = ApiClassifier(cfg.get("ai", {}).get("api") or {}, cfg.get("ai", {}).get("labels") or {})
-    temp_dir = PROJ / ".phone_move_tmp"
-    temp_dir.mkdir(exist_ok=True)
+    temp_dir = PROJ / ".phone_move_tmp" / ("run-{:%H%M%S}".format(datetime.now()))
+    temp_dir.mkdir(parents=True, exist_ok=True)
     log_path = PROJ / ("手机整理日志-{:%Y%m%d-%H%M%S}.csv".format(datetime.now()))
     log_file = open(log_path, "w", encoding="utf-8-sig", newline="")
     writer = csv.writer(log_file)
