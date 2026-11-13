@@ -192,9 +192,19 @@ def _attr(obj, name: str, default=None):
 
 
 def _get_folder(item):
-    folder = _attr(item, "GetFolder")
+    try:
+        folder = item.GetFolder
+    except Exception:
+        return None
     if folder is None:
         return None
+    # win32com 的 Folder 对象本身可调用，不能直接用 callable 判断；
+    # 真正的 Folder 有 Items 方法，方法对象没有。
+    if callable(folder) and not hasattr(folder, "Items"):
+        try:
+            folder = folder()
+        except Exception:
+            return None
     return folder
 
 
