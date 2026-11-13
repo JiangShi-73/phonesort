@@ -147,6 +147,24 @@ groups:
       - path: "*/scans/*"
       - path: "*/Scan/*"
 
+  - name: "二次元"
+    enabled: true
+    rules:
+      - path: "*/二刺螈/*"
+      - path: "*/二次元/*"
+      - path: "*/anime/*"
+      - path: "*/Anime/*"
+      - path: "*/coser/*"
+      - path: "*/cosplay/*"
+
+  - name: "梗图"
+    enabled: true
+    rules:
+      - path: "*/梗图/*"
+      - path: "*/meme/*"
+      - path: "*/Meme/*"
+      - path: "*/表情包/*"
+
   - name: "视频"
     enabled: true
     rules:
@@ -161,6 +179,17 @@ ai:
   # 用本地 CLIP 模型识别图片内容，分出“二次元”和“梗图”。
   # 模型下载见 README 的“内容识别”一节；没有模型时这里保持 false 即可。
   enabled: false
+  # 识别方式：clip = 本地 CLIP 模型；api = 调用 DeepSeek 视觉接口
+  backend: "clip"
+  api:
+    base_url: "https://api.deepseek.com"
+    model: "deepseek-flash"
+    api_key_env: "DEEPSEEK_API_KEY"
+    detail: "low"          # low 更快更便宜；original 保留原图
+    max_side: 1024
+    timeout: 60
+    retries: 2
+    threshold: 0.55        # DeepSeek 返回的置信度低于这个就不采用
   model_dir: "models/clip-vit-base-patch32"
   # 分数达到 threshold 且领先第二名 margin，才采用 AI 结果
   threshold: 0.30
@@ -217,6 +246,31 @@ ai:
       - "a photo of a dog"
       - "a photo of an animal"
       - "a wildlife photo"
+      - "a photo of furniture with measurement labels"
+      - "a diagram with measurements and arrows"
+      - "a product photo with size annotations"
+      - "an instructional image with text labels"
+      - "a photo of a room with dimensions"
+      - "a screenshot of a document"
+      - "a receipt or form"
+      - "a photo of a building interior"
+      - "a QR code"
+      - "a payment QR code poster"
+      - "a poster with a QR code"
+      - "a screenshot of a payment page"
+      - "an advertisement poster with Chinese text"
+      - "a business card"
+      - "a coupon or ticket"
+      - "a group chat invitation QR code"
+      - "a photo of a store sign"
+      - "a photo of a sign with Chinese characters"
+      - "a photo of a campus building"
+      - "a photo of a statue in a plaza"
+      - "a photo of a shop window"
+      - "a photo of a street scene"
+      - "a photo of a poster on a wall"
+      - "a photo of an outdoor sculpture"
+      - "a photo of a building entrance"
 
 options:
   # 分组内的二级目录，留空 = 直接放在分组目录里
