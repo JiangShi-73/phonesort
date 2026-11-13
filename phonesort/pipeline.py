@@ -291,12 +291,18 @@ class Organizer:
     def _ensure_classifier(self):
         if self.classifier is not None:
             return self.classifier
+        labels = self.ai_cfg.get("labels") or {}
+        backend = str(self.ai_cfg.get("backend") or "clip").lower()
+        if backend == "api":
+            from .vision_api import ApiClassifier
+
+            self.classifier = ApiClassifier(self.ai_cfg.get("api") or {}, labels)
+            return self.classifier
         from .vision import ClipClassifier, model_ready
 
         model_dir = self._model_dir()
         if not model_ready(model_dir):
             raise RuntimeError(f"找不到 CLIP 模型：{model_dir}")
-        labels = self.ai_cfg.get("labels") or {}
         self.classifier = ClipClassifier(model_dir, labels)
         return self.classifier
 
@@ -315,6 +321,24 @@ class Organizer:
             self.ai_failed = True
             self._emit(type="warning", message=f"内容识别不可用：{exc}")
             return None
+
+    @staticmethod
+    def _looks_like_qr(path: Path) -> bool:
+        try:
+            import cv2
+            import numpy as np
+
+            # cv2.imread 在 Windows 上读不了中文路径，改用 imdecode
+            data = np.fromfile(str(path), dtype=np.uint8)
+            if data.size == 0:
+                return False
+            image = cv2.imdecode(data, cv2.IMREAD_COLOR)
+            if image is None:
+                return False
+            _, points, _ = cv2.QRCodeDetector().detectAndDecode(image)
+            return points is not None
+        except Exception:
+            return False
 
     def _decide_group(self, info: MediaInfo, ai_hit, cfg: dict):
         """返回 (分组, 说明, 是否按相机排除)。"""
@@ -408,6 +432,11 @@ class Organizer:
             files = self._collect()
             summary.total = len(files)
             total = len(files)
+            try:
+                self.state_dir.mkdir(parents=True, exist_ok=True)
+                (self.state_dir / "scan_total.txt").write_text(str(len(files)), encoding="utf-8")
+            except OSError:
+                pass
             for index, remote in enumerate(files, 1):
                 if self._cancelled():
                     break
@@ -485,6 +514,8 @@ class Organizer:
         ai_hit = None
         if self.ai_enabled and info.media == "image":
             ai_hit = self._ai_decision(local)
+            if ai_hit and ai_hit[0] == "梗图" and self._looks_like_qr(local):
+                ai_hit = None
 
         # 3) 规则 + 相机 + AI 综合判定
         group, why, excluded = self._decide_group(info, ai_hit, cfg)
