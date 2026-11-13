@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import glob
 import os
 import shlex
 import shutil
@@ -150,6 +151,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="只处理前 N 张（试跑）")
     parser.add_argument("--apply", action="store_true", help="真正移动；不加只做识别和报告")
     parser.add_argument("--workers", type=int, default=1, help="下载/识别的并发数（默认 1）")
+    parser.add_argument("--retry-failed", action="store_true", help="只重试上一份日志里失败的文件")
     parser.add_argument("--config", default=str(PROJ / "groups.yaml"))
     args = parser.parse_args()
 
@@ -164,6 +166,21 @@ def main() -> int:
     shell = _dispatch()
     use_adb = adb_device()
     print("设备：{} | ADB：{} | 日期 >= {}".format(src.name, "可用" if use_adb else "不可用", args.since))
+
+    failed_keys = None
+    if args.retry_failed:
+        logs = sorted(glob.glob(str(PROJ / "手机整理日志-*.csv")), key=os.path.getmtime)
+        if not logs:
+            print("没有找到日志")
+            return 1
+        failed_keys = set()
+        with open(logs[-1], encoding="utf-8-sig") as handle:
+            reader = csv.reader(handle)
+            next(reader, None)
+            for row in reader:
+                if len(row) > 4 and "失败" in row[4]:
+                    failed_keys.add((row[0], row[1][:16]))
+        print("上次失败 {} 条，只重试这些".format(len(failed_keys)))
 
     candidates = []
     scanned = 0
@@ -184,6 +201,8 @@ def main() -> int:
         if when < since:
             continue
         if until is not None and when > until:
+            continue
+        if failed_keys is not None and (remote.name, when.strftime("%Y-%m-%d %H:%M")) not in failed_keys:
             continue
         candidates.append((remote, when))
         if args.limit and len(candidates) >= args.limit:
