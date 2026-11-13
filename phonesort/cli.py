@@ -45,6 +45,8 @@ def _add_common(parser):
     parser.add_argument("--include-camera", action="store_true", help="连相机拍摄的照片也一起整理")
     parser.add_argument("--ai", dest="ai", action="store_true", help="启用内容识别（二次元/梗图）")
     parser.add_argument("--no-ai", dest="ai", action="store_false", help="关闭内容识别")
+    parser.add_argument("--ai-backend", choices=["clip", "api"], default=None,
+                        help="识别方式：clip=本地模型，api=调用 DeepSeek 视觉接口")
     parser.add_argument("--limit", type=int, default=0, help="最多处理多少个文件（调试用）")
     parser.set_defaults(ai=None)
 
@@ -85,6 +87,8 @@ def cmd_scan(args):
     cfg = load_config(args.config)
     if args.ai is not None:
         cfg.setdefault("ai", {})["enabled"] = bool(args.ai)
+    if args.ai_backend:
+        cfg.setdefault("ai", {})["backend"] = args.ai_backend
     try:
         source = _build_source(args, cfg)
     except Exception as exc:
@@ -122,6 +126,8 @@ def cmd_run(args):
     cfg = load_config(args.config)
     if args.ai is not None:
         cfg.setdefault("ai", {})["enabled"] = bool(args.ai)
+    if args.ai_backend:
+        cfg.setdefault("ai", {})["backend"] = args.ai_backend
     try:
         source = _build_source(args, cfg)
     except Exception as exc:
