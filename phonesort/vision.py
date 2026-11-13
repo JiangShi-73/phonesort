@@ -98,7 +98,8 @@ class ClipClassifier:
             return None
         candidates.sort(key=lambda item: -item[1])
         best_name, best_score = candidates[0]
-        second = candidates[1][1] if len(candidates) > 1 else 0.0
+        # “其他”也要参与比较：如果它比候选分组还高，说明更像普通照片
+        second = max(scores.get("其他", 0.0), candidates[1][1] if len(candidates) > 1 else 0.0)
         limit = (thresholds or {}).get(best_name, threshold)
         if best_score >= limit and (best_score - second) >= margin:
             return best_name, best_score, scores
