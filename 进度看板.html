@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>手机相册整理 · 进度</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #101113; color: #e8eaed;
+    font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wrap { width: min(880px, 92vw); padding: 40px 0; }
+  h1 { font-size: 26px; margin: 0 0 6px; font-weight: 700; }
+  .sub { color: #8b919a; font-size: 13px; margin-bottom: 26px; }
+  .bar { height: 14px; background: #24262b; border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: linear-gradient(90deg, #22c55e, #4ade80); transition: width .6s ease; }
+  .stat { display: flex; justify-content: space-between; margin-top: 12px; font-size: 15px; }
+  .stat b { font-size: 22px; }
+  .muted { color: #8b919a; font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 26px; }
+  .card { background: #1a1c20; border: 1px solid #26292e; border-radius: 12px; padding: 14px 16px; }
+  .card .name { color: #aab0b8; font-size: 13px; }
+  .card .num { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .foot { margin-top: 26px; color: #6f757d; font-size: 12px; display: flex; justify-content: space-between; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>手机相册分组整理</h1>
+  <div class="sub">Redmi K70E · 自动跳过相机照片 · 内容识别（二次元 / 梗图）</div>
+  <div class="bar"><div class="fill" id="fill"></div></div>
+  <div class="stat">
+    <div><b id="pct">--</b><span class="muted" id="count"> / --</span></div>
+    <div class="muted" id="speed">--</div>
+  </div>
+  <div class="cards" id="cards"></div>
+  <div class="foot">
+    <div><span class="dot"></span><span id="updated">等待数据…</span></div>
+    <div>每 3 秒自动刷新</div>
+  </div>
+</div>
+<script>
+function load() {
+  var s = document.createElement('script');
+  s.src = '整理结果/进度.js?t=' + Date.now();
+  s.onload = render;
+  s.onerror = function () { document.getElementById('updated').textContent = '等待进度数据…（整理还没开始？）'; };
+  document.head.appendChild(s);
+  setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 1500);
+}
+function render() {
+  var d = window.__PHONE_SORT_PROGRESS;
+  if (!d) return;
+  document.getElementById('fill').style.width = d.percent + '%';
+  document.getElementById('pct').textContent = d.percent + '%';
+  document.getElementById('count').textContent = ' ' + d.processed + ' / ' + d.total;
+  var eta = d.eta_minutes > 0 ? ('预计剩余 ' + d.eta_minutes + ' 分钟') : '即将完成';
+  document.getElementById('speed').textContent = d.rate_per_minute + ' 个/分钟 · ' + eta;
+  var cards = document.getElementById('cards');
+  cards.innerHTML = '';
+  var names = Object.keys(d.groups);
+  for (var i = 0; i < names.length; i++) {
+    var div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = '<div class="name"></div><div class="num"></div>';
+    div.querySelector('.name').textContent = names[i];
+    div.querySelector('.num').textContent = d.groups[names[i]];
+    cards.appendChild(div);
+  }
+  document.getElementById('updated').textContent = '更新于 ' + d.time;
+}
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>
